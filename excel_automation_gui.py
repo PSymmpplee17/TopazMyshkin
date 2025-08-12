@@ -26,6 +26,11 @@ import requests
 import zipfile
 import io
 import shutil
+import subprocess
+
+# Отключаем SSL warnings
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Импортируем наши модули
 from automation_tool_fixed import ExcelProcessor
@@ -33,7 +38,7 @@ from material_sorter import MaterialSorter
 from excel_to_txt_converter import ExcelToTxtConverter
 
 GITHUB_REPO = "PSymmpplee17/TopazMyshkin"  # Укажите свой репозиторий (без .git и https)
-APP_VERSION = "1.0.1"  # Текущая версия приложения
+APP_VERSION = "1.0.2"  # Текущая версия приложения
 
 # Настройка логирования для GUI
 class GUILogHandler(logging.Handler):
@@ -58,7 +63,7 @@ class ExcelAutomationGUI:
     
     def __init__(self, root):
         self.root = root
-        self.root.title("Excel Automation Tool - Полная обработка")
+        self.root.title("MyshkinTOOL - Полная обработка")
         self.root.geometry("900x700")
         self.root.minsize(800, 600)
         
@@ -397,7 +402,18 @@ class ExcelAutomationGUI:
             is_exe = getattr(sys, 'frozen', False)
             current_exe = Path(sys.executable if is_exe else __file__)
             
-            resp = requests.get(url, stream=True, timeout=30)
+            # Скачиваем обновление с обработкой SSL ошибок
+            headers = {
+                'User-Agent': 'ExcelAutomationTool/1.0.0',
+                'Accept': 'application/octet-stream'
+            }
+            
+            try:
+                resp = requests.get(url, stream=True, timeout=30, headers=headers, verify=True)
+            except requests.exceptions.SSLError:
+                logging.info("SSL ошибка при скачивании, пробуем без верификации сертификата")
+                resp = requests.get(url, stream=True, timeout=30, headers=headers, verify=False)
+                
             if resp.status_code != 200:
                 messagebox.showerror("Ошибка", "Не удалось скачать архив обновления")
                 return
@@ -428,7 +444,6 @@ del "%~f0" >nul 2>&1
                                    "Приложение перезапустится автоматически.")
                 
                 # Запускаем батник и закрываем приложение
-                import subprocess
                 subprocess.Popen([str(batch_script)], shell=True)
                 self.root.quit()
                 
@@ -459,7 +474,20 @@ del "%~f0" >nul 2>&1
                 self.root.after(0, lambda: self.current_step.set("Проверка обновлений..."))
                 
                 url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-                resp = requests.get(url, timeout=10)
+                
+                # Добавляем SSL контекст и заголовки для решения проблем с сертификатами
+                headers = {
+                    'User-Agent': 'ExcelAutomationTool/1.0.0',
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+                
+                # Попробуем с верификацией SSL, если не получится - отключим её
+                try:
+                    resp = requests.get(url, timeout=10, headers=headers, verify=True)
+                except requests.exceptions.SSLError:
+                    # Если SSL ошибка, попробуем без верификации
+                    logging.info("SSL ошибка, пробуем без верификации сертификата")
+                    resp = requests.get(url, timeout=10, headers=headers, verify=False)
                 
                 if resp.status_code != 200:
                     self.root.after(0, lambda: self.current_step.set("Готов к работе"))
@@ -492,6 +520,7 @@ del "%~f0" >nul 2>&1
                     
             except Exception as e:
                 # Если ошибка сети, просто продолжаем работу
+                logging.info(f"Не удалось проверить обновления: {e}")
                 self.root.after(0, lambda: self.current_step.set("Готов к работе"))
         
         # Запускаем проверку в отдельном потоке
