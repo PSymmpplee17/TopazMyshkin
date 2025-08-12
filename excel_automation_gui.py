@@ -38,7 +38,7 @@ from material_sorter import MaterialSorter
 from excel_to_txt_converter import ExcelToTxtConverter
 
 GITHUB_REPO = "PSymmpplee17/TopazMyshkin"  # Укажите свой репозиторий (без .git и https)
-APP_VERSION = "1.0.2"  # Текущая версия приложения
+APP_VERSION = "1.0.3"  # Текущая версия приложения
 
 # Настройка логирования для GUI
 class GUILogHandler(logging.Handler):
@@ -63,7 +63,7 @@ class ExcelAutomationGUI:
     
     def __init__(self, root):
         self.root = root
-        self.root.title("MyshkinTOOL - Полная обработка")
+        self.root.title("MyshkinTool - Полная обработка")
         self.root.geometry("900x700")
         self.root.minsize(800, 600)
         
@@ -104,7 +104,7 @@ class ExcelAutomationGUI:
         header_frame.grid(row=0, column=0, columnspan=3, pady=(0, 20), sticky=(tk.W, tk.E))
         header_frame.columnconfigure(1, weight=1)
         
-        title_label = ttk.Label(header_frame, text="Excel Automation Tool", 
+        title_label = ttk.Label(header_frame, text="Tool for Myshkin", 
                                font=('Arial', 16, 'bold'))
         title_label.grid(row=0, column=0, sticky=tk.W)
         
@@ -133,7 +133,7 @@ class ExcelAutomationGUI:
         self.order_entry = ttk.Entry(order_frame, textvariable=self.order_number, width=10)
         self.order_entry.grid(row=0, column=0, padx=(0, 10))
         
-        ttk.Label(order_frame, text="(например: 72 или 1 или 113)").grid(row=0, column=1, sticky=tk.W)
+        ttk.Label(order_frame, text="(например: 1, 13 или 113)").grid(row=0, column=1, sticky=tk.W)
         
         # Текущий шаг
         ttk.Label(main_frame, text="Состояние:").grid(row=3, column=0, sticky=tk.W, pady=5)
@@ -360,6 +360,25 @@ class ExcelAutomationGUI:
         self.progress.stop()
         self.start_button.config(state='normal')
     
+    def compare_versions(self, current, latest):
+        """
+        Сравнивает версии в формате X.Y.Z
+        Возвращает True если latest версия новее current
+        """
+        def parse_version(version):
+            # Убираем префикс 'v' если есть
+            version = version.lstrip('v')
+            try:
+                return tuple(map(int, version.split('.')))
+            except ValueError:
+                # Если не удается разобрать, считаем что это старая версия
+                return (0, 0, 0)
+        
+        current_tuple = parse_version(current)
+        latest_tuple = parse_version(latest)
+        
+        return latest_tuple > current_tuple
+
     def check_update(self):
         """Проверяет наличие новой версии на GitHub и предлагает обновиться"""
         try:
@@ -374,7 +393,9 @@ class ExcelAutomationGUI:
             if not latest_version:
                 messagebox.showerror("Ошибка", "Не удалось определить версию релиза")
                 return
-            if latest_version == APP_VERSION:
+            
+            # Проверяем, действительно ли новая версия новее текущей
+            if not self.compare_versions(APP_VERSION, latest_version):
                 messagebox.showinfo("Обновление", "У вас последняя версия приложения")
                 return
             # Есть новая версия
@@ -496,7 +517,8 @@ del "%~f0" >nul 2>&1
                 data = resp.json()
                 latest_version = data.get("tag_name", "")
                 
-                if latest_version and latest_version != APP_VERSION:
+                # Проверяем, действительно ли есть более новая версия
+                if latest_version and self.compare_versions(APP_VERSION, latest_version):
                     # Есть обновление
                     assets = data.get("assets", [])
                     download_url = None
@@ -513,7 +535,7 @@ del "%~f0" >nul 2>&1
                     else:
                         self.root.after(0, lambda: self.current_step.set("Готов к работе"))
                 else:
-                    # Обновлений нет
+                    # Обновлений нет или текущая версия новее
                     self.root.after(0, lambda: self.current_step.set("Готов к работе (актуальная версия)"))
                     # Через 3 секунды убираем это сообщение
                     self.root.after(3000, lambda: self.current_step.set("Готов к работе"))
