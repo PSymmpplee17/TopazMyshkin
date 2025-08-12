@@ -38,7 +38,7 @@ from material_sorter import MaterialSorter
 from excel_to_txt_converter import ExcelToTxtConverter
 
 GITHUB_REPO = "PSymmpplee17/TopazMyshkin"  # Укажите свой репозиторий (без .git и https)
-APP_VERSION = "1.0.4"  # Текущая версия приложения
+APP_VERSION = "1.0.5"  # Текущая версия приложения
 
 # Создаем папки для организации файлов
 def ensure_directories():
@@ -437,10 +437,22 @@ class ExcelAutomationGUI:
             # Есть новая версия
             assets = data.get("assets", [])
             download_url = None
+            
+            # Приоритет: .exe файл для исполняемых версий, .zip для разработки
+            is_exe = getattr(sys, 'frozen', False)
+            preferred_extension = ".exe" if is_exe else ".zip"
+            
             for asset in assets:
-                if asset["name"].endswith(".zip"):
+                if asset["name"].endswith(preferred_extension):
                     download_url = asset["browser_download_url"]
                     break
+            
+            # Если предпочтительный формат не найден, берем любой доступный
+            if not download_url:
+                for asset in assets:
+                    if asset["name"].endswith(".exe") or asset["name"].endswith(".zip"):
+                        download_url = asset["browser_download_url"]
+                        break
             if not download_url:
                 messagebox.showerror("Ошибка", "В релизе не найден архив приложения")
                 return
@@ -477,20 +489,33 @@ class ExcelAutomationGUI:
             
             self.current_step.set("Установка обновления...")
             
-            if url.endswith('.exe'):
+            # Определяем тип скачиваемого файла
+            is_exe_update = url.endswith('.exe')
+            is_zip_update = url.endswith('.zip')
+            
+            if is_exe_update:
                 # Скачиваем новый exe файл
                 new_exe_path = current_exe.parent / f"ExcelAutomationTool_v{new_version}.exe"
                 with open(new_exe_path, 'wb') as f:
                     for chunk in resp.iter_content(chunk_size=8192):
                         f.write(chunk)
                 
+                logging.info(f"Скачан новый exe файл: {new_exe_path}")
+                
                 # Создаем батник для замены файла и перезапуска
                 batch_script = current_exe.parent / "update.bat"
                 batch_content = f"""@echo off
+echo Обновление приложения...
 timeout /t 2 /nobreak >nul
 del "{current_exe}" >nul 2>&1
 move "{new_exe_path}" "{current_exe}" >nul 2>&1
-start "" "{current_exe}"
+if exist "{current_exe}" (
+    echo Обновление завершено успешно
+    start "" "{current_exe}"
+) else (
+    echo Ошибка обновления
+    pause
+)
 del "%~f0" >nul 2>&1
 """
                 with open(batch_script, 'w', encoding='cp1251') as f:
@@ -498,13 +523,22 @@ del "%~f0" >nul 2>&1
                 
                 messagebox.showinfo("Обновление", 
                                    f"Обновление до версии {new_version} загружено!\n\n"
-                                   "Приложение перезапустится автоматически.")
+                                   "Приложение перезапустится автоматически с новой версией.")
                 
                 # Запускаем батник и закрываем приложение
                 subprocess.Popen([str(batch_script)], shell=True)
                 self.root.quit()
                 
-            else:
+            elif is_zip_update:
+                # Если запущен как exe, но доступен только zip - уведомляем пользователя
+                if is_exe:
+                    messagebox.showwarning("Ограниченное обновление", 
+                                         f"Доступно обновление до версии {new_version}, но только в виде ZIP архива.\n\n"
+                                         "Для полного обновления скачайте новую версию вручную с GitHub:\n"
+                                         f"https://github.com/{GITHUB_REPO}/releases/latest")
+                    self.current_step.set("Требуется ручное обновление")
+                    return
+                
                 # Обновление через zip архив (для разработки)
                 with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
                     # Извлекаем только .py файлы
@@ -516,6 +550,10 @@ del "%~f0" >nul 2>&1
                                    f"Обновление до версии {new_version} завершено!\n\n"
                                    "Перезапустите приложение для применения изменений.")
                 self.current_step.set("Обновление завершено - перезапустите приложение")
+            
+            else:
+                messagebox.showerror("Ошибка", "Неподдерживаемый формат файла обновления")
+                return
                 
         except Exception as e:
             messagebox.showerror("Ошибка обновления", f"Произошла ошибка при обновлении:\n{str(e)}")
@@ -560,10 +598,21 @@ del "%~f0" >nul 2>&1
                     download_url = None
                     
                     # Ищем подходящий файл для скачивания
+                    # Приоритет: .exe файл для исполняемых версий, .zip для разработки
+                    is_exe = getattr(sys, 'frozen', False)
+                    preferred_extension = ".exe" if is_exe else ".zip"
+                    
                     for asset in assets:
-                        if asset["name"].endswith(".exe") or asset["name"].endswith(".zip"):
+                        if asset["name"].endswith(preferred_extension):
                             download_url = asset["browser_download_url"]
                             break
+                    
+                    # Если предпочтительный формат не найден, берем любой доступный
+                    if not download_url:
+                        for asset in assets:
+                            if asset["name"].endswith(".exe") or asset["name"].endswith(".zip"):
+                                download_url = asset["browser_download_url"]
+                                break
                     
                     if download_url:
                         # Показываем уведомление через 2 секунды после запуска
