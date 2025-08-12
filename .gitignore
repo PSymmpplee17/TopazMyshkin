@@ -1,0 +1,56 @@
+# Игнорируем логи
+*.log
+automation.log
+material_sorting.log
+excel_to_txt.log
+
+# Игнорируем Excel файлы
+*.xls
+*.xlsx
+*.xlsm
+
+# Игнорируем TXT файлы результатов (но НЕ requirements.txt)
+*_15mm.txt
+*_1mm.txt
+*_2mm.txt
+*_3mm.txt
+
+# Игнорируем папки сборки
+build/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+
+# Игнорируем spec файлы PyInstaller
+*.spec
+
+# Игнорируем временные файлы
+temp/
+tmp/
+*.tmp
+
+# Игнорируем файлы операционной системы
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Игнорируем IDE файлы
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Игнорируем виртуальные окружения
+venv/
+env/
+.env
+
+# Игнорируем результаты тестов
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Игнорируем пользовательские настройки
+config.ini
+settings.json
