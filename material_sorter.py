@@ -10,6 +10,7 @@
 
 import pandas as pd
 import re
+import sys
 from pathlib import Path
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Border, Side, Font
@@ -18,15 +19,31 @@ from openpyxl.utils import get_column_letter
 import logging
 
 # Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('material_sorting.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+def setup_logging():
+    """Настраивает логирование в папку logs"""
+    # Определяем папку приложения
+    if getattr(sys, 'frozen', False):
+        app_dir = Path(sys.executable).parent
+    else:
+        app_dir = Path(__file__).parent
+    
+    # Создаем папку logs
+    logs_dir = app_dir / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    
+    # Настраиваем логирование
+    log_file = logs_dir / 'material_sorting.log'
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
+    return logging.getLogger(__name__)
+
+logger = setup_logging()
 
 
 class MaterialSorter:

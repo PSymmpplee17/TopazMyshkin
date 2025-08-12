@@ -38,7 +38,20 @@ from material_sorter import MaterialSorter
 from excel_to_txt_converter import ExcelToTxtConverter
 
 GITHUB_REPO = "PSymmpplee17/TopazMyshkin"  # Укажите свой репозиторий (без .git и https)
-APP_VERSION = "1.0.3"  # Текущая версия приложения
+APP_VERSION = "1.0.4"  # Текущая версия приложения
+
+# Создаем папки для организации файлов
+def ensure_directories():
+    """Создает необходимые папки для логов и результатов"""
+    app_dir = Path(__file__).parent if not getattr(sys, 'frozen', False) else Path(sys.executable).parent
+    
+    logs_dir = app_dir / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    
+    results_dir = app_dir / "results"
+    results_dir.mkdir(exist_ok=True)
+    
+    return logs_dir, results_dir
 
 # Настройка логирования для GUI
 class GUILogHandler(logging.Handler):
@@ -66,6 +79,9 @@ class ExcelAutomationGUI:
         self.root.title("MyshkinTool - Полная обработка")
         self.root.geometry("900x700")
         self.root.minsize(800, 600)
+        
+        # Создаем необходимые папки
+        self.logs_dir, self.results_dir = ensure_directories()
         
         # Переменные
         self.input_file = tk.StringVar()
@@ -318,19 +334,34 @@ class ExcelAutomationGUI:
             if not converter.load_workbook():
                 raise Exception("Ошибка загрузки файла для конвертации")
             
+            # Создаем папку для результатов этого заказа
+            order_results_dir = self.results_dir / order_id
+            order_results_dir.mkdir(exist_ok=True)
+            logging.info(f"Создана папка для результатов: {order_results_dir}")
+            
             txt_files = converter.convert_all_sheets()
             if not txt_files:
                 raise Exception("Ошибка конвертации в TXT")
             
+            # Перемещаем TXT файлы в папку заказа
+            moved_files = []
+            for txt_file in txt_files:
+                if txt_file.exists():
+                    new_location = order_results_dir / txt_file.name
+                    shutil.move(str(txt_file), str(new_location))
+                    moved_files.append(new_location)
+                    logging.info(f"Файл перемещен: {txt_file.name} -> {new_location}")
+            
             # Завершение
             self.current_step.set("Обработка завершена успешно!")
             logging.info("=== ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО ===")
-            logging.info(f"Создано TXT файлов: {len(txt_files)}")
-            for txt_file in txt_files:
+            logging.info(f"Создано TXT файлов: {len(moved_files)}")
+            logging.info(f"Файлы сохранены в: {order_results_dir}")
+            for txt_file in moved_files:
                 logging.info(f"  • {txt_file.name}")
             
             # Показываем сообщение об успехе
-            self.root.after(0, self.show_success, txt_files)
+            self.root.after(0, self.show_success, moved_files, order_results_dir)
             
         except Exception as e:
             logging.error(f"ОШИБКА ОБРАБОТКИ: {e}")
@@ -341,9 +372,14 @@ class ExcelAutomationGUI:
             # Разблокируем интерфейс
             self.root.after(0, self.finish_processing)
     
-    def show_success(self, txt_files):
+    def show_success(self, txt_files, results_dir=None):
         """Показывает сообщение об успешном завершении"""
-        message = f"Обработка завершена успешно!\n\nСоздано файлов: {len(txt_files)}\n\nФайлы:\n"
+        message = f"Обработка завершена успешно!\n\nСоздано файлов: {len(txt_files)}\n"
+        
+        if results_dir:
+            message += f"Результаты сохранены в папке:\n{results_dir}\n\n"
+        
+        message += "Файлы:\n"
         for txt_file in txt_files[:5]:  # Показываем максимум 5 файлов
             message += f"• {txt_file.name}\n"
         if len(txt_files) > 5:
