@@ -16,6 +16,7 @@ from tkinter import ttk, filedialog, messagebox, scrolledtext
 import threading
 import sys
 import os
+import subprocess
 from pathlib import Path
 import logging
 import pandas as pd
@@ -32,7 +33,7 @@ from material_sorter import MaterialSorter
 from excel_to_txt_converter import ExcelToTxtConverter
 
 GITHUB_REPO = "PSymmpplee17/TopazMyshkin"  # Укажите свой репозиторий (без .git и https)
-APP_VERSION = "1.0.0"  # Текущая версия приложения
+APP_VERSION = "1.0.1"  # Текущая версия приложения
 
 # Настройка логирования для GUI
 class GUILogHandler(logging.Handler):
@@ -64,7 +65,7 @@ class ExcelAutomationGUI:
         # Переменные
         self.input_file = tk.StringVar()
         self.order_number = tk.StringVar()
-        self.current_step = tk.StringVar(value="Выберите файл")
+        self.current_step = tk.StringVar(value="Запуск приложения...")
         
         # Настройка интерфейса
         self.setup_ui()
@@ -93,10 +94,18 @@ class ExcelAutomationGUI:
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         
-        # Заголовок
-        title_label = ttk.Label(main_frame, text="Excel Automation Tool", 
+        # Заголовок и версия
+        header_frame = ttk.Frame(main_frame)
+        header_frame.grid(row=0, column=0, columnspan=3, pady=(0, 20), sticky=(tk.W, tk.E))
+        header_frame.columnconfigure(1, weight=1)
+        
+        title_label = ttk.Label(header_frame, text="Excel Automation Tool", 
                                font=('Arial', 16, 'bold'))
-        title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
+        title_label.grid(row=0, column=0, sticky=tk.W)
+        
+        version_label = ttk.Label(header_frame, text=f"v{APP_VERSION}", 
+                                 font=('Arial', 10), foreground='gray')
+        version_label.grid(row=0, column=2, sticky=tk.E)
         
         # Выбор файла
         ttk.Label(main_frame, text="Входной файл:").grid(row=1, column=0, sticky=tk.W, pady=5)
@@ -382,43 +391,108 @@ class ExcelAutomationGUI:
         """Скачивает и обновляет приложение"""
         try:
             self.current_step.set("Скачивание обновления...")
+            self.progress.start()
+            
+            # Определяем, запущены ли мы как exe или как скрипт
+            is_exe = getattr(sys, 'frozen', False)
+            current_exe = Path(sys.executable if is_exe else __file__)
+            
             resp = requests.get(url, stream=True, timeout=30)
             if resp.status_code != 200:
                 messagebox.showerror("Ошибка", "Не удалось скачать архив обновления")
                 return
-            with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
-                for member in zf.namelist():
-                    # Перезаписываем файлы приложения
-                    zf.extract(member, Path(__file__).parent)
-            messagebox.showinfo("Обновление", f"Обновление до версии {new_version} завершено! Перезапустите приложение.")
-            self.current_step.set("Обновление завершено")
+            
+            self.current_step.set("Установка обновления...")
+            
+            if url.endswith('.exe'):
+                # Скачиваем новый exe файл
+                new_exe_path = current_exe.parent / f"ExcelAutomationTool_v{new_version}.exe"
+                with open(new_exe_path, 'wb') as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                # Создаем батник для замены файла и перезапуска
+                batch_script = current_exe.parent / "update.bat"
+                batch_content = f"""@echo off
+timeout /t 2 /nobreak >nul
+del "{current_exe}" >nul 2>&1
+move "{new_exe_path}" "{current_exe}" >nul 2>&1
+start "" "{current_exe}"
+del "%~f0" >nul 2>&1
+"""
+                with open(batch_script, 'w', encoding='cp1251') as f:
+                    f.write(batch_content)
+                
+                messagebox.showinfo("Обновление", 
+                                   f"Обновление до версии {new_version} загружено!\n\n"
+                                   "Приложение перезапустится автоматически.")
+                
+                # Запускаем батник и закрываем приложение
+                import subprocess
+                subprocess.Popen([str(batch_script)], shell=True)
+                self.root.quit()
+                
+            else:
+                # Обновление через zip архив (для разработки)
+                with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+                    # Извлекаем только .py файлы
+                    for member in zf.namelist():
+                        if member.endswith('.py') or member == 'requirements.txt':
+                            zf.extract(member, current_exe.parent)
+                
+                messagebox.showinfo("Обновление", 
+                                   f"Обновление до версии {new_version} завершено!\n\n"
+                                   "Перезапустите приложение для применения изменений.")
+                self.current_step.set("Обновление завершено - перезапустите приложение")
+                
         except Exception as e:
-            messagebox.showerror("Ошибка обновления", str(e))
+            messagebox.showerror("Ошибка обновления", f"Произошла ошибка при обновлении:\n{str(e)}")
             self.current_step.set("Ошибка обновления")
+        finally:
+            self.progress.stop()
 
     def auto_check_update(self):
         """Автоматическая проверка обновлений при запуске"""
         def check_in_background():
             try:
+                # Показываем статус проверки
+                self.root.after(0, lambda: self.current_step.set("Проверка обновлений..."))
+                
                 url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
                 resp = requests.get(url, timeout=10)
+                
                 if resp.status_code != 200:
+                    self.root.after(0, lambda: self.current_step.set("Готов к работе"))
                     return
+                    
                 data = resp.json()
                 latest_version = data.get("tag_name", "")
+                
                 if latest_version and latest_version != APP_VERSION:
-                    # Показываем уведомление об обновлении
+                    # Есть обновление
                     assets = data.get("assets", [])
                     download_url = None
+                    
+                    # Ищем подходящий файл для скачивания
                     for asset in assets:
-                        if asset["name"].endswith(".zip") or asset["name"].endswith(".exe"):
+                        if asset["name"].endswith(".exe") or asset["name"].endswith(".zip"):
                             download_url = asset["browser_download_url"]
                             break
                     
                     if download_url:
-                        self.root.after(1000, lambda: self.show_update_notification(latest_version, download_url))
-            except:
-                pass
+                        # Показываем уведомление через 2 секунды после запуска
+                        self.root.after(2000, lambda: self.show_update_notification(latest_version, download_url))
+                    else:
+                        self.root.after(0, lambda: self.current_step.set("Готов к работе"))
+                else:
+                    # Обновлений нет
+                    self.root.after(0, lambda: self.current_step.set("Готов к работе (актуальная версия)"))
+                    # Через 3 секунды убираем это сообщение
+                    self.root.after(3000, lambda: self.current_step.set("Готов к работе"))
+                    
+            except Exception as e:
+                # Если ошибка сети, просто продолжаем работу
+                self.root.after(0, lambda: self.current_step.set("Готов к работе"))
         
         # Запускаем проверку в отдельном потоке
         thread = threading.Thread(target=check_in_background)
@@ -427,11 +501,76 @@ class ExcelAutomationGUI:
     
     def show_update_notification(self, latest_version, download_url):
         """Показывает уведомление об обновлении"""
-        if messagebox.askyesno("Обновление", 
-                              f"Доступна новая версия: {latest_version}\n\n"
-                              f"Текущая версия: {APP_VERSION}\n\n"
-                              "Скачать и обновить сейчас?"):
+        # Создаем красивое окно уведомления
+        update_window = tk.Toplevel(self.root)
+        update_window.title("Доступно обновление")
+        update_window.geometry("400x250")
+        update_window.resizable(False, False)
+        update_window.grab_set()  # Модальное окно
+        
+        # Центрируем окно
+        update_window.update_idletasks()
+        x = (update_window.winfo_screenwidth() // 2) - (200)
+        y = (update_window.winfo_screenheight() // 2) - (125)
+        update_window.geometry(f"+{x}+{y}")
+        
+        # Фрейм для содержимого
+        main_frame = ttk.Frame(update_window, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Иконка и заголовок
+        ttk.Label(main_frame, text="🔄 Доступно обновление", 
+                 font=('Arial', 14, 'bold')).pack(pady=(0, 10))
+        
+        # Информация о версиях
+        info_text = f"""Найдена новая версия приложения!
+
+Текущая версия: {APP_VERSION}
+Новая версия: {latest_version}
+
+Новая версия содержит улучшения и исправления.
+Обновление произойдет автоматически."""
+        
+        ttk.Label(main_frame, text=info_text, justify=tk.CENTER).pack(pady=(0, 20))
+        
+        # Кнопки
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(pady=10)
+        
+        def start_update():
+            update_window.destroy()
             self.download_and_update(download_url, latest_version)
+        
+        def cancel_update():
+            update_window.destroy()
+            # Сохраняем информацию о пропущенном обновлении
+            self.current_step.set("Обновление отложено")
+        
+        ttk.Button(button_frame, text="Обновить сейчас", 
+                  command=start_update, 
+                  style='Accent.TButton').pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(button_frame, text="Отложить", 
+                  command=cancel_update).pack(side=tk.LEFT)
+        
+        # Автоматическое обновление через 10 секунд
+        def auto_update():
+            if update_window.winfo_exists():
+                start_update()
+        
+        update_window.after(10000, auto_update)  # 10 секунд
+        
+        # Обратный отсчет
+        countdown_label = ttk.Label(main_frame, text="Автоматическое обновление через 10 сек", 
+                                   font=('Arial', 8), foreground='gray')
+        countdown_label.pack()
+        
+        def update_countdown(seconds):
+            if update_window.winfo_exists() and seconds > 0:
+                countdown_label.config(text=f"Автоматическое обновление через {seconds} сек")
+                update_window.after(1000, lambda: update_countdown(seconds-1))
+        
+        update_countdown(10)
 
 
 # Добавляем метод для автоматической обработки без запроса OrderID
