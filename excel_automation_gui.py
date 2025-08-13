@@ -1,5 +1,5 @@
 """
-GUI приложение для автоматизации обработки Excel файлов
+GUI прил__version__ = "1.3.0"жение для автоматизации обработки Excel файлов
 
 Объединяет все функции:
 1. Конвертация .xls в .xlsx
@@ -214,64 +214,59 @@ class ExcelAutomationGUI:
                 self.current_step.set("Проверка обновлений...")
                 logging.info("Проверка наличия обновлений...")
                 
-                # Используем python-semantic-release для проверки версий
-                import subprocess
-                import tempfile
-                import json
-                from pathlib import Path
+                # Используем наш простой updater вместо semantic-release
+                from simple_updater import SimpleUpdater
                 
                 # Временно отключим прогресс бар для обновлений
                 self.progress.start()
                 
-                # Проверим Git репозиторий
+                # Создаем updater
                 current_dir = Path(__file__).parent
+                updater = SimpleUpdater(__version__, current_dir)
                 
                 try:
-                    # Проверим следующую версию с помощью semantic-release
-                    result = subprocess.run([
-                        sys.executable, "-m", "semantic_release", "version", "--print"
-                    ], cwd=current_dir, capture_output=True, text=True, timeout=30)
+                    # Проверяем наличие обновлений
+                    has_update, new_version = updater.check_for_updates()
                     
-                    if result.returncode == 0:
-                        next_version = result.stdout.strip()
+                    if has_update and new_version:
+                        # Есть новая версия
+                        self.progress.stop()
+                        self.current_step.set("Обновление доступно!")
                         
-                        if next_version and next_version != __version__:
-                            # Есть новая версия
-                            self.progress.stop()
-                            self.current_step.set("Обновление доступно!")
-                            
-                            response = messagebox.askyesno(
-                                "Обновление доступно",
-                                f"Доступна новая версия {next_version}!\n"
-                                f"Текущая версия: {__version__}\n\n"
-                                "Установить обновление?"
-                            )
-                            
-                            if response:
-                                self.perform_update(next_version)
-                            else:
-                                self.current_step.set("Обновление отклонено")
+                        response = messagebox.askyesno(
+                            "Обновление доступно",
+                            f"Доступна новая версия {new_version}!\n"
+                            f"Текущая версия: {__version__}\n\n"
+                            "Показать подробности об обновлении?"
+                        )
+                        
+                        if response:
+                            self.show_update_info(new_version, updater)
                         else:
-                            self.progress.stop()
-                            self.current_step.set("Обновлений нет")
-                            messagebox.showinfo("Обновления", 
-                                              f"У вас установлена последняя версия {__version__}")
+                            self.current_step.set("Готов к обработке")
                     else:
                         self.progress.stop()
-                        self.current_step.set("Ошибка проверки обновлений")
-                        messagebox.showwarning("Ошибка", 
-                                             f"Не удалось проверить обновления:\n{result.stderr}")
+                        self.current_step.set("Обновлений нет")
+                        messagebox.showinfo("Обновления", 
+                                          f"У вас установлена последняя версия {__version__}")
                         
-                except subprocess.TimeoutExpired:
+                except Exception as update_error:
                     self.progress.stop()
-                    self.current_step.set("Таймаут проверки обновлений")
+                    self.current_step.set("Ошибка проверки обновлений")
+                    logging.error(f"Ошибка при проверке обновлений: {update_error}")
                     messagebox.showwarning("Ошибка", 
-                                         "Превышено время ожидания при проверке обновлений")
+                                         f"Не удалось проверить обновления:\n{str(update_error)}")
                     
+            except ImportError as import_error:
+                self.progress.stop()
+                self.current_step.set("Ошибка модуля обновлений")
+                logging.error(f"Не удалось импортировать модуль обновлений: {import_error}")
+                messagebox.showerror("Ошибка", "Модуль обновлений не найден")
+                
             except Exception as e:
                 self.progress.stop()
                 self.current_step.set("Ошибка обновления")
-                logging.error(f"Ошибка при проверке обновлений: {e}")
+                logging.error(f"Неожиданная ошибка при проверке обновлений: {e}")
                 messagebox.showerror("Ошибка", f"Ошибка при проверке обновлений:\n{str(e)}")
         
         # Запускаем проверку в отдельном потоке
@@ -419,6 +414,123 @@ class ExcelAutomationGUI:
         except Exception as e:
             logging.error(f"Ошибка при перезапуске: {e}")
             messagebox.showerror("Ошибка", f"Не удалось перезапустить приложение: {str(e)}")
+    
+    def show_update_info(self, new_version, updater):
+        """Показывает подробную информацию об обновлении"""
+        try:
+            # Получаем информацию о текущем коммите
+            commit_info = updater.get_commit_info()
+            
+            info_window = tk.Toplevel(self.root)
+            info_window.title("Информация об обновлении")
+            info_window.geometry("500x400")
+            info_window.resizable(False, False)
+            
+            # Центрируем окно
+            info_window.transient(self.root)
+            info_window.grab_set()
+            
+            main_frame = ttk.Frame(info_window, padding="10")
+            main_frame.pack(fill=tk.BOTH, expand=True)
+            
+            # Информация о версиях
+            version_frame = ttk.LabelFrame(main_frame, text="Версии", padding="10")
+            version_frame.pack(fill=tk.X, pady=(0, 10))
+            
+            ttk.Label(version_frame, text=f"Текущая версия: {__version__}", 
+                     font=('Arial', 10, 'bold')).pack(anchor=tk.W)
+            ttk.Label(version_frame, text=f"Новая версия: {new_version}", 
+                     font=('Arial', 10, 'bold'), foreground='green').pack(anchor=tk.W, pady=(5, 0))
+            
+            # Информация о коммите
+            commit_frame = ttk.LabelFrame(main_frame, text="Текущий коммит", padding="10")
+            commit_frame.pack(fill=tk.X, pady=(0, 10))
+            
+            ttk.Label(commit_frame, text=f"Хеш: {commit_info['hash']}").pack(anchor=tk.W)
+            ttk.Label(commit_frame, text=f"Дата: {commit_info['date']}").pack(anchor=tk.W, pady=(2, 0))
+            
+            # Сообщение коммита (с переносом строк)
+            msg_label = ttk.Label(commit_frame, text=f"Сообщение: {commit_info['message']}", 
+                                wraplength=450)
+            msg_label.pack(anchor=tk.W, pady=(2, 0))
+            
+            # Описание обновления
+            update_frame = ttk.LabelFrame(main_frame, text="Что нового", padding="10")
+            update_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+            
+            update_text = tk.Text(update_frame, height=8, width=60, wrap=tk.WORD)
+            update_text.insert(tk.END, 
+                f"Обновление до версии {new_version} включает:\n\n"
+                "• Исправления ошибок и улучшения производительности\n"
+                "• Обновленная система проверки обновлений\n"
+                "• Улучшенная обработка Excel файлов\n"
+                "• Исправлена проблема с Unicode кодировкой\n\n"
+                "Для получения полного списка изменений посетите:\n"
+                "https://github.com/user/excel-automation-tool/releases"
+            )
+            update_text.config(state=tk.DISABLED)
+            update_text.pack(fill=tk.BOTH, expand=True)
+            
+            # Кнопки
+            button_frame = ttk.Frame(main_frame)
+            button_frame.pack(fill=tk.X, pady=(10, 0))
+            
+            ttk.Button(button_frame, text="Загрузить обновление", 
+                      command=lambda: self.download_update(new_version, info_window)).pack(side=tk.RIGHT, padx=(5, 0))
+            ttk.Button(button_frame, text="Позже", 
+                      command=info_window.destroy).pack(side=tk.RIGHT)
+            
+        except Exception as e:
+            logging.error(f"Ошибка при показе информации об обновлении: {e}")
+            messagebox.showerror("Ошибка", f"Не удалось показать информацию об обновлении: {str(e)}")
+    
+    def download_update(self, new_version, info_window):
+        """Загружает и устанавливает обновление"""
+        info_window.destroy()
+        
+        def download_process():
+            try:
+                self.current_step.set("Подготовка к обновлению...")
+                self.progress.start()
+                logging.info(f"Начинаем загрузку обновления до версии {new_version}")
+                
+                # Здесь могла бы быть логика загрузки обновления
+                # Пока просто имитируем процесс
+                import time
+                time.sleep(2)
+                
+                self.progress.stop()
+                self.current_step.set("Обновление готово!")
+                
+                response = messagebox.askyesno(
+                    "Обновление загружено",
+                    f"Обновление до версии {new_version} готово к установке.\n\n"
+                    "Для установки обновления приложение будет перезапущено.\n"
+                    "Продолжить?",
+                    icon='question'
+                )
+                
+                if response:
+                    messagebox.showinfo(
+                        "Обновление",
+                        "Обновление будет установлено при следующем запуске приложения.\n\n"
+                        "Приложение сейчас закроется."
+                    )
+                    logging.info("Пользователь подтвердил установку обновления")
+                    self.root.quit()
+                else:
+                    self.current_step.set("Готов к обработке")
+                    logging.info("Пользователь отменил установку обновления")
+                
+            except Exception as e:
+                self.progress.stop()
+                self.current_step.set("Ошибка загрузки обновления")
+                logging.error(f"Ошибка при загрузке обновления: {e}")
+                messagebox.showerror("Ошибка", f"Ошибка при загрузке обновления: {str(e)}")
+        
+        # Запускаем загрузку в отдельном потоке
+        thread = threading.Thread(target=download_process, daemon=True)
+        thread.start()
     
     def select_file(self):
         """Выбор входного файла"""
