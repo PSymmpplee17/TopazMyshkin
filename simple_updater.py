@@ -301,6 +301,110 @@ class SimpleUpdater:
             self.logger.error(f"Ошибка получения информации о коммите: {e}")
             return {'hash': 'unknown', 'message': 'Error', 'date': 'unknown'}
 
+    def perform_git_pull_update(self, new_version: str) -> bool:
+        """
+        Выполняет обновление через git checkout на указанную версию
+        
+        Args:
+            new_version: Новая версия для обновления
+            
+        Returns:
+            bool: Успешность операции
+        """
+        try:
+            self.logger.info(f"Начинаем Git обновление до версии {new_version}")
+            
+            # Сначала проверим, что рабочая директория чистая
+            status_result = subprocess.run([
+                "git", "status", "--porcelain"
+            ],
+            cwd=self.repo_path,
+            capture_output=True,
+            text=True,
+            env=self._get_clean_env()
+            )
+            
+            if status_result.returncode != 0:
+                self.logger.error(f"Ошибка проверки статуса Git: {status_result.stderr}")
+                return False
+            
+            # Если есть незакоммиченные изменения, сохраним их
+            if status_result.stdout.strip():
+                self.logger.info("Найдены незакоммиченные изменения, сохраняем stash")
+                stash_result = subprocess.run([
+                    "git", "stash", "push", "-m", f"Auto-stash before update to {new_version}"
+                ],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                env=self._get_clean_env()
+                )
+                
+                if stash_result.returncode != 0:
+                    self.logger.error(f"Ошибка создания stash: {stash_result.stderr}")
+                    return False
+            
+            # Обновляем удаленные ссылки
+            fetch_result = subprocess.run([
+                "git", "fetch", "--all", "--tags"
+            ],
+            cwd=self.repo_path,
+            capture_output=True,
+            text=True,
+            env=self._get_clean_env()
+            )
+            
+            if fetch_result.returncode != 0:
+                self.logger.error(f"Ошибка git fetch: {fetch_result.stderr}")
+                return False
+            
+            # Переключаемся на тег новой версии
+            checkout_result = subprocess.run([
+                "git", "checkout", f"v{new_version}"
+            ],
+            cwd=self.repo_path,
+            capture_output=True,
+            text=True,
+            env=self._get_clean_env()
+            )
+            
+            if checkout_result.returncode != 0:
+                self.logger.error(f"Ошибка git checkout: {checkout_result.stderr}")
+                return False
+            
+            # Обновляем файлы версий
+            success = True
+            
+            # Обновляем pyproject.toml
+            pyproject_file = self.repo_path / "pyproject.toml"
+            if pyproject_file.exists():
+                if not self.update_version_file(new_version, pyproject_file):
+                    self.logger.error("Ошибка обновления pyproject.toml")
+                    success = False
+            
+            # Обновляем основной Python файл
+            main_py_files = [
+                self.repo_path / "excel_automation_gui.py",
+                self.repo_path / "__init__.py"
+            ]
+            
+            for py_file in main_py_files:
+                if py_file.exists():
+                    if not self.update_version_file(new_version, py_file):
+                        self.logger.error(f"Ошибка обновления {py_file}")
+                        success = False
+            
+            if success:
+                self.logger.info(f"Успешное обновление до версии {new_version}")
+                return True
+            else:
+                self.logger.error("Ошибки при обновлении файлов версий")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Неожиданная ошибка при Git обновлении: {e}")
+            return False
+
 
 def main():
     """Тестирование updater"""
