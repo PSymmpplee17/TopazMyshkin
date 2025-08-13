@@ -7,9 +7,11 @@ GUI приложение для автоматизации обработки Ex
 3. Сортировка по толщине материала
 4. Конвертация в TXT файлы
 
-Автор: Автоматизация обработки Excel
-Дата: 2025-08-12
+Автор: Symmppllee
+Дата: 2025-08-13
 """
+
+__version__ = "1.0.9"
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
@@ -22,23 +24,14 @@ import logging
 import pandas as pd
 import re
 from datetime import datetime
-import requests
-import zipfile
-import io
 import shutil
-import subprocess
-
-# Отключаем SSL warnings
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Импортируем наши модули
 from automation_tool_fixed import ExcelProcessor
 from material_sorter import MaterialSorter
 from excel_to_txt_converter import ExcelToTxtConverter
 
-GITHUB_REPO = "PSymmpplee17/TopazMyshkin"  # Укажите свой репозиторий (без .git и https)
-APP_VERSION = "1.0.5"  # Текущая версия приложения
+APP_VERSION = __version__  # Используем версию из системы версионирования
 
 # Создаем папки для организации файлов
 def ensure_directories():
@@ -185,6 +178,10 @@ class ExcelAutomationGUI:
         ttk.Button(main_frame, text="Очистить лог", 
                   command=self.clear_log).grid(row=8, column=0, pady=5)
         
+        # Кнопка проверки обновлений
+        ttk.Button(main_frame, text="Проверить обновления", 
+                  command=self.check_for_updates).grid(row=8, column=1, pady=5)
+        
         # Кнопка выхода
         ttk.Button(main_frame, text="Выход", 
                   command=self.root.quit).grid(row=8, column=2, pady=5, sticky=tk.E)
@@ -209,6 +206,219 @@ class ExcelAutomationGUI:
     def clear_log(self):
         """Очищает лог"""
         self.log_text.delete(1.0, tk.END)
+    
+    def check_for_updates(self):
+        """Проверяет наличие обновлений приложения"""
+        def update_check():
+            try:
+                self.current_step.set("Проверка обновлений...")
+                logging.info("Проверка наличия обновлений...")
+                
+                # Используем python-semantic-release для проверки версий
+                import subprocess
+                import tempfile
+                import json
+                from pathlib import Path
+                
+                # Временно отключим прогресс бар для обновлений
+                self.progress.start()
+                
+                # Проверим Git репозиторий
+                current_dir = Path(__file__).parent
+                
+                try:
+                    # Проверим следующую версию с помощью semantic-release
+                    result = subprocess.run([
+                        sys.executable, "-m", "semantic_release", "version", "--print"
+                    ], cwd=current_dir, capture_output=True, text=True, timeout=30)
+                    
+                    if result.returncode == 0:
+                        next_version = result.stdout.strip()
+                        
+                        if next_version and next_version != __version__:
+                            # Есть новая версия
+                            self.progress.stop()
+                            self.current_step.set("Обновление доступно!")
+                            
+                            response = messagebox.askyesno(
+                                "Обновление доступно",
+                                f"Доступна новая версия {next_version}!\n"
+                                f"Текущая версия: {__version__}\n\n"
+                                "Установить обновление?"
+                            )
+                            
+                            if response:
+                                self.perform_update(next_version)
+                            else:
+                                self.current_step.set("Обновление отклонено")
+                        else:
+                            self.progress.stop()
+                            self.current_step.set("Обновлений нет")
+                            messagebox.showinfo("Обновления", 
+                                              f"У вас установлена последняя версия {__version__}")
+                    else:
+                        self.progress.stop()
+                        self.current_step.set("Ошибка проверки обновлений")
+                        messagebox.showwarning("Ошибка", 
+                                             f"Не удалось проверить обновления:\n{result.stderr}")
+                        
+                except subprocess.TimeoutExpired:
+                    self.progress.stop()
+                    self.current_step.set("Таймаут проверки обновлений")
+                    messagebox.showwarning("Ошибка", 
+                                         "Превышено время ожидания при проверке обновлений")
+                    
+            except Exception as e:
+                self.progress.stop()
+                self.current_step.set("Ошибка обновления")
+                logging.error(f"Ошибка при проверке обновлений: {e}")
+                messagebox.showerror("Ошибка", f"Ошибка при проверке обновлений:\n{str(e)}")
+        
+        # Запускаем проверку в отдельном потоке
+        thread = threading.Thread(target=update_check, daemon=True)
+        thread.start()
+        try:
+                self.current_step.set("Проверка обновлений...")
+                logging.info("Проверка наличия обновлений...")
+                
+                # Используем python-semantic-release для проверки версий
+                import subprocess
+                import tempfile
+                import json
+                from pathlib import Path
+                
+                # Временно отключим прогресс бар для обновлений
+                self.progress.start()
+                
+                # Проверим Git репозиторий
+                current_dir = Path(__file__).parent
+                
+                # Проверим следующую версию с помощью semantic-release
+                result = subprocess.run([
+                    sys.executable, "-m", "semantic_release", "version", "--print"
+                ], cwd=current_dir, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    next_version = result.stdout.strip()
+                    
+                    if next_version and next_version != __version__:
+                        # Есть новая версия
+                        self.progress.stop()
+                        self.current_step.set("Обновление доступно!")
+                        
+                        answer = messagebox.askyesno(
+                            "Обновление доступно",
+                            f"Доступна новая версия: {next_version}\n"
+                            f"Текущая версия: {__version__}\n\n"
+                            "Обновить приложение сейчас?",
+                            icon='question'
+                        )
+                        
+                        if answer:
+                            self.perform_update(next_version)
+                        else:
+                            logging.info("Обновление отменено пользователем")
+                            self.current_step.set("Готов к обработке")
+                    else:
+                        # Нет обновлений
+                        self.progress.stop()
+                        self.current_step.set("Обновлений нет")
+                        messagebox.showinfo(
+                            "Нет обновлений",
+                            f"У вас уже установлена последняя версия: {__version__}",
+                            icon='info'
+                        )
+                        logging.info("Обновлений не найдено")
+                else:
+                    # Ошибка проверки
+                    self.progress.stop()
+                    self.current_step.set("Ошибка проверки обновлений")
+                    logging.error(f"Ошибка при проверке обновлений: {result.stderr}")
+                    messagebox.showerror(
+                        "Ошибка",
+                        "Не удалось проверить обновления.\n"
+                        "Убедитесь, что приложение установлено в Git репозитории."
+                    )
+                
+        except Exception as e:
+                self.progress.stop()
+                self.current_step.set("Ошибка проверки обновлений")
+                logging.error(f"Неожиданная ошибка при проверке обновлений: {e}")
+                messagebox.showerror("Ошибка", f"Ошибка при проверке обновлений: {str(e)}")
+        
+        # Запускаем проверку в отдельном потоке
+        thread = threading.Thread(target=update_check, daemon=True)
+        thread.start()
+    
+    def perform_update(self, new_version):
+        """Выполняет обновление приложения"""
+        def update_process():
+            try:
+                self.current_step.set("Загрузка обновления...")
+                self.progress.start()
+                logging.info(f"Начинаем обновление до версии {new_version}")
+                
+                current_dir = Path(__file__).parent
+                
+                # Выполняем обновление с помощью semantic-release
+                result = subprocess.run([
+                    sys.executable, "-m", "semantic_release", "version"
+                ], cwd=current_dir, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    self.progress.stop()
+                    self.current_step.set("Обновление завершено!")
+                    
+                    messagebox.showinfo(
+                        "Обновление завершено",
+                        f"Приложение успешно обновлено до версии {new_version}!\n\n"
+                        "Для применения изменений необходимо перезапустить приложение.",
+                        icon='info'
+                    )
+                    
+                    logging.info("Обновление успешно завершено")
+                    
+                    # Предложим перезапуск
+                    restart = messagebox.askyesno(
+                        "Перезапуск",
+                        "Перезапустить приложение сейчас?",
+                        icon='question'
+                    )
+                    
+                    if restart:
+                        self.restart_application()
+                else:
+                    self.progress.stop()
+                    self.current_step.set("Ошибка обновления")
+                    logging.error(f"Ошибка при обновлении: {result.stderr}")
+                    messagebox.showerror(
+                        "Ошибка обновления",
+                        f"Не удалось выполнить обновление:\n{result.stderr}"
+                    )
+                
+            except Exception as e:
+                self.progress.stop()
+                self.current_step.set("Ошибка обновления")
+                logging.error(f"Ошибка процесса обновления: {e}")
+                messagebox.showerror("Ошибка", f"Ошибка при обновлении: {str(e)}")
+        
+        # Запускаем обновление в отдельном потоке
+        thread = threading.Thread(target=update_process, daemon=True)
+        thread.start()
+    
+    def restart_application(self):
+        """Перезапускает приложение"""
+        try:
+            logging.info("Перезапуск приложения...")
+            self.root.quit()
+            
+            # Перезапускаем приложение
+            import subprocess
+            subprocess.Popen([sys.executable, __file__])
+            
+        except Exception as e:
+            logging.error(f"Ошибка при перезапуске: {e}")
+            messagebox.showerror("Ошибка", f"Не удалось перезапустить приложение: {str(e)}")
     
     def select_file(self):
         """Выбор входного файла"""
@@ -395,318 +605,6 @@ class ExcelAutomationGUI:
         """Завершение обработки - разблокировка интерфейса"""
         self.progress.stop()
         self.start_button.config(state='normal')
-    
-    def compare_versions(self, current, latest):
-        """
-        Сравнивает версии в формате X.Y.Z
-        Возвращает True если latest версия новее current
-        """
-        def parse_version(version):
-            # Убираем префикс 'v' если есть
-            version = version.lstrip('v')
-            try:
-                return tuple(map(int, version.split('.')))
-            except ValueError:
-                # Если не удается разобрать, считаем что это старая версия
-                return (0, 0, 0)
-        
-        current_tuple = parse_version(current)
-        latest_tuple = parse_version(latest)
-        
-        return latest_tuple > current_tuple
-
-    def check_update(self):
-        """Проверяет наличие новой версии на GitHub и предлагает обновиться"""
-        try:
-            self.current_step.set("Проверка обновлений...")
-            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-            resp = requests.get(url, timeout=10)
-            if resp.status_code != 200:
-                messagebox.showerror("Ошибка", "Не удалось получить информацию о релизе")
-                return
-            data = resp.json()
-            latest_version = data.get("tag_name", "")
-            if not latest_version:
-                messagebox.showerror("Ошибка", "Не удалось определить версию релиза")
-                return
-            
-            # Проверяем, действительно ли новая версия новее текущей
-            if not self.compare_versions(APP_VERSION, latest_version):
-                messagebox.showinfo("Обновление", "У вас последняя версия приложения")
-                return
-            # Есть новая версия
-            assets = data.get("assets", [])
-            download_url = None
-            
-            # Приоритет: .exe файл для исполняемых версий, .zip для разработки
-            is_exe = getattr(sys, 'frozen', False)
-            preferred_extension = ".exe" if is_exe else ".zip"
-            
-            for asset in assets:
-                if asset["name"].endswith(preferred_extension):
-                    download_url = asset["browser_download_url"]
-                    break
-            
-            # Если предпочтительный формат не найден, берем любой доступный
-            if not download_url:
-                for asset in assets:
-                    if asset["name"].endswith(".exe") or asset["name"].endswith(".zip"):
-                        download_url = asset["browser_download_url"]
-                        break
-            if not download_url:
-                messagebox.showerror("Ошибка", "В релизе не найден архив приложения")
-                return
-            if messagebox.askyesno("Обновление", f"Доступна новая версия: {latest_version}. Скачать и обновить?"):
-                self.download_and_update(download_url, latest_version)
-        except Exception as e:
-            messagebox.showerror("Ошибка обновления", str(e))
-
-    def download_and_update(self, url, new_version):
-        """Скачивает и обновляет приложение"""
-        try:
-            self.current_step.set("Скачивание обновления...")
-            self.progress.start()
-            
-            # Определяем, запущены ли мы как exe или как скрипт
-            is_exe = getattr(sys, 'frozen', False)
-            current_exe = Path(sys.executable if is_exe else __file__)
-            
-            # Скачиваем обновление с обработкой SSL ошибок
-            headers = {
-                'User-Agent': 'ExcelAutomationTool/1.0.0',
-                'Accept': 'application/octet-stream'
-            }
-            
-            try:
-                resp = requests.get(url, stream=True, timeout=30, headers=headers, verify=True)
-            except requests.exceptions.SSLError:
-                logging.info("SSL ошибка при скачивании, пробуем без верификации сертификата")
-                resp = requests.get(url, stream=True, timeout=30, headers=headers, verify=False)
-                
-            if resp.status_code != 200:
-                messagebox.showerror("Ошибка", "Не удалось скачать архив обновления")
-                return
-            
-            self.current_step.set("Установка обновления...")
-            
-            # Определяем тип скачиваемого файла
-            is_exe_update = url.endswith('.exe')
-            is_zip_update = url.endswith('.zip')
-            
-            if is_exe_update:
-                # Скачиваем новый exe файл
-                new_exe_path = current_exe.parent / f"ExcelAutomationTool_v{new_version}.exe"
-                with open(new_exe_path, 'wb') as f:
-                    for chunk in resp.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                
-                logging.info(f"Скачан новый exe файл: {new_exe_path}")
-                
-                # Создаем батник для замены файла и перезапуска
-                batch_script = current_exe.parent / "update.bat"
-                batch_content = f"""@echo off
-echo Обновление приложения...
-timeout /t 2 /nobreak >nul
-del "{current_exe}" >nul 2>&1
-move "{new_exe_path}" "{current_exe}" >nul 2>&1
-if exist "{current_exe}" (
-    echo Обновление завершено успешно
-    start "" "{current_exe}"
-) else (
-    echo Ошибка обновления
-    pause
-)
-del "%~f0" >nul 2>&1
-"""
-                with open(batch_script, 'w', encoding='cp1251') as f:
-                    f.write(batch_content)
-                
-                messagebox.showinfo("Обновление", 
-                                   f"Обновление до версии {new_version} загружено!\n\n"
-                                   "Приложение перезапустится автоматически с новой версией.")
-                
-                # Запускаем батник и закрываем приложение
-                subprocess.Popen([str(batch_script)], shell=True)
-                self.root.quit()
-                
-            elif is_zip_update:
-                # Если запущен как exe, но доступен только zip - уведомляем пользователя
-                if is_exe:
-                    messagebox.showwarning("Ограниченное обновление", 
-                                         f"Доступно обновление до версии {new_version}, но только в виде ZIP архива.\n\n"
-                                         "Для полного обновления скачайте новую версию вручную с GitHub:\n"
-                                         f"https://github.com/{GITHUB_REPO}/releases/latest")
-                    self.current_step.set("Требуется ручное обновление")
-                    return
-                
-                # Обновление через zip архив (для разработки)
-                with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
-                    # Извлекаем только .py файлы
-                    for member in zf.namelist():
-                        if member.endswith('.py') or member == 'requirements.txt':
-                            zf.extract(member, current_exe.parent)
-                
-                messagebox.showinfo("Обновление", 
-                                   f"Обновление до версии {new_version} завершено!\n\n"
-                                   "Перезапустите приложение для применения изменений.")
-                self.current_step.set("Обновление завершено - перезапустите приложение")
-            
-            else:
-                messagebox.showerror("Ошибка", "Неподдерживаемый формат файла обновления")
-                return
-                
-        except Exception as e:
-            messagebox.showerror("Ошибка обновления", f"Произошла ошибка при обновлении:\n{str(e)}")
-            self.current_step.set("Ошибка обновления")
-        finally:
-            self.progress.stop()
-
-    def auto_check_update(self):
-        """Автоматическая проверка обновлений при запуске"""
-        def check_in_background():
-            try:
-                # Показываем статус проверки
-                self.root.after(0, lambda: self.current_step.set("Проверка обновлений..."))
-                
-                url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-                
-                # Добавляем SSL контекст и заголовки для решения проблем с сертификатами
-                headers = {
-                    'User-Agent': 'ExcelAutomationTool/1.0.0',
-                    'Accept': 'application/vnd.github.v3+json'
-                }
-                
-                # Попробуем с верификацией SSL, если не получится - отключим её
-                try:
-                    resp = requests.get(url, timeout=10, headers=headers, verify=True)
-                except requests.exceptions.SSLError:
-                    # Если SSL ошибка, попробуем без верификации
-                    logging.info("SSL ошибка, пробуем без верификации сертификата")
-                    resp = requests.get(url, timeout=10, headers=headers, verify=False)
-                
-                if resp.status_code != 200:
-                    self.root.after(0, lambda: self.current_step.set("Готов к работе"))
-                    return
-                    
-                data = resp.json()
-                latest_version = data.get("tag_name", "")
-                
-                # Проверяем, действительно ли есть более новая версия
-                if latest_version and self.compare_versions(APP_VERSION, latest_version):
-                    # Есть обновление
-                    assets = data.get("assets", [])
-                    download_url = None
-                    
-                    # Ищем подходящий файл для скачивания
-                    # Приоритет: .exe файл для исполняемых версий, .zip для разработки
-                    is_exe = getattr(sys, 'frozen', False)
-                    preferred_extension = ".exe" if is_exe else ".zip"
-                    
-                    for asset in assets:
-                        if asset["name"].endswith(preferred_extension):
-                            download_url = asset["browser_download_url"]
-                            break
-                    
-                    # Если предпочтительный формат не найден, берем любой доступный
-                    if not download_url:
-                        for asset in assets:
-                            if asset["name"].endswith(".exe") or asset["name"].endswith(".zip"):
-                                download_url = asset["browser_download_url"]
-                                break
-                    
-                    if download_url:
-                        # Показываем уведомление через 2 секунды после запуска
-                        self.root.after(2000, lambda: self.show_update_notification(latest_version, download_url))
-                    else:
-                        self.root.after(0, lambda: self.current_step.set("Готов к работе"))
-                else:
-                    # Обновлений нет или текущая версия новее
-                    self.root.after(0, lambda: self.current_step.set("Готов к работе (актуальная версия)"))
-                    # Через 3 секунды убираем это сообщение
-                    self.root.after(3000, lambda: self.current_step.set("Готов к работе"))
-                    
-            except Exception as e:
-                # Если ошибка сети, просто продолжаем работу
-                logging.info(f"Не удалось проверить обновления: {e}")
-                self.root.after(0, lambda: self.current_step.set("Готов к работе"))
-        
-        # Запускаем проверку в отдельном потоке
-        thread = threading.Thread(target=check_in_background)
-        thread.daemon = True
-        thread.start()
-    
-    def show_update_notification(self, latest_version, download_url):
-        """Показывает уведомление об обновлении"""
-        # Создаем красивое окно уведомления
-        update_window = tk.Toplevel(self.root)
-        update_window.title("Доступно обновление")
-        update_window.geometry("400x250")
-        update_window.resizable(False, False)
-        update_window.grab_set()  # Модальное окно
-        
-        # Центрируем окно
-        update_window.update_idletasks()
-        x = (update_window.winfo_screenwidth() // 2) - (200)
-        y = (update_window.winfo_screenheight() // 2) - (125)
-        update_window.geometry(f"+{x}+{y}")
-        
-        # Фрейм для содержимого
-        main_frame = ttk.Frame(update_window, padding="20")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Иконка и заголовок
-        ttk.Label(main_frame, text="🔄 Доступно обновление", 
-                 font=('Arial', 14, 'bold')).pack(pady=(0, 10))
-        
-        # Информация о версиях
-        info_text = f"""Найдена новая версия приложения!
-
-Текущая версия: {APP_VERSION}
-Новая версия: {latest_version}
-
-Новая версия содержит улучшения и исправления.
-Обновление произойдет автоматически."""
-        
-        ttk.Label(main_frame, text=info_text, justify=tk.CENTER).pack(pady=(0, 20))
-        
-        # Кнопки
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(pady=10)
-        
-        def start_update():
-            update_window.destroy()
-            self.download_and_update(download_url, latest_version)
-        
-        def cancel_update():
-            update_window.destroy()
-            # Сохраняем информацию о пропущенном обновлении
-            self.current_step.set("Обновление отложено")
-        
-        ttk.Button(button_frame, text="Обновить сейчас", 
-                  command=start_update, 
-                  style='Accent.TButton').pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Button(button_frame, text="Отложить", 
-                  command=cancel_update).pack(side=tk.LEFT)
-        
-        # Автоматическое обновление через 10 секунд
-        def auto_update():
-            if update_window.winfo_exists():
-                start_update()
-        
-        update_window.after(10000, auto_update)  # 10 секунд
-        
-        # Обратный отсчет
-        countdown_label = ttk.Label(main_frame, text="Автоматическое обновление через 10 сек", 
-                                   font=('Arial', 8), foreground='gray')
-        countdown_label.pack()
-        
-        def update_countdown(seconds):
-            if update_window.winfo_exists() and seconds > 0:
-                countdown_label.config(text=f"Автоматическое обновление через {seconds} сек")
-                update_window.after(1000, lambda: update_countdown(seconds-1))
-        
-        update_countdown(10)
 
 
 # Добавляем метод для автоматической обработки без запроса OrderID
@@ -787,7 +685,6 @@ def main():
     
     # Создаем приложение
     app = ExcelAutomationGUI(root)
-    app.auto_check_update()
     # Запускаем главный цикл
     root.mainloop()
 

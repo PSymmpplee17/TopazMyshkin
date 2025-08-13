@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "excel-automation-tool"
-version = "1.0.9"
+version = "1.1.0"
 description = "Excel files automation processing tool"
 readme = "README.md"
 authors = [
@@ -48,27 +48,18 @@ excel_automation = ["*.py"]
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 version_variables = [
-    "excel_automation_gui.py:__version__",
-    "version.json:version"
+    "excel_automation_gui.py:__version__"
 ]
-build_command = "python -m build"
-dist_path = "dist/"
+build_command = ""
 upload_to_pypi = false
-upload_to_repository = true
-repository_url = "https://github.com/user/excel-automation-tool"
-commit_message = "bump version to {version}"
+upload_to_repository = false
+commit_message = "bump: version {version}"
 tag_format = "v{version}"
-changelog_file = "CHANGELOG.md"
-changelog_sections = "feature,fix,breaking,documentation,performance"
 
 [tool.semantic_release.commit_parser_options]
 allowed_tags = ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert"]
 minor_tags = ["feat"]
 patch_tags = ["fix", "perf"]
-
-[tool.semantic_release.changelog]
-mode = "update"
-insertion_flag = "<!-- version list -->"
 
 [tool.semantic_release.branches.main]
 match = "main|master"
