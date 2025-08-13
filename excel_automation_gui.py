@@ -38,7 +38,7 @@ from material_sorter import MaterialSorter
 from excel_to_txt_converter import ExcelToTxtConverter
 
 GITHUB_REPO = "PSymmpplee17/TopazMyshkin"  # Укажите свой репозиторий (без .git и https)
-APP_VERSION = "v1.0.6"  # Текущая версия приложения
+APP_VERSION = "1.0.5"  # Текущая версия приложения
 
 # Создаем папки для организации файлов
 def ensure_directories():
@@ -399,10 +399,7 @@ class ExcelAutomationGUI:
     def compare_versions(self, current, latest):
         """
         Сравнивает версии в формате X.Y.Z
-        Возвращает: 
-        - положительное число, если latest > current
-        - 0, если версии равны
-        - отрицательное число, если latest < current
+        Возвращает True если latest версия новее current
         """
         def parse_version(version):
             # Убираем префикс 'v' если есть
@@ -416,13 +413,7 @@ class ExcelAutomationGUI:
         current_tuple = parse_version(current)
         latest_tuple = parse_version(latest)
         
-        # Сравниваем кортежи поэлементно
-        if latest_tuple > current_tuple:
-            return 1  # latest версия новее
-        elif latest_tuple < current_tuple:
-            return -1  # current версия новее
-        else:
-            return 0  # версии одинаковые
+        return latest_tuple > current_tuple
 
     def check_update(self):
         """Проверяет наличие новой версии на GitHub и предлагает обновиться"""
@@ -645,66 +636,77 @@ del "%~f0" >nul 2>&1
         thread.start()
     
     def show_update_notification(self, latest_version, download_url):
-        """Полностью автоматическое обновление без участия пользователя"""
-        # Сразу показываем уведомление в интерфейсе и запускаем обновление через 2 секунды
-        self.current_step.set(f"Найдено обновление {latest_version} - автозапуск через 2 сек...")
-        
-        # Создаем минимальное неблокирующее окно с информацией
+        """Показывает уведомление об обновлении"""
+        # Создаем красивое окно уведомления
         update_window = tk.Toplevel(self.root)
-        update_window.title("Автоматическое обновление")
-        update_window.geometry("450x160")
+        update_window.title("Доступно обновление")
+        update_window.geometry("400x250")
         update_window.resizable(False, False)
-        update_window.attributes('-topmost', True)  # Поверх всех окон
+        update_window.grab_set()  # Модальное окно
         
         # Центрируем окно
         update_window.update_idletasks()
-        x = (update_window.winfo_screenwidth() // 2) - (225)
-        y = (update_window.winfo_screenheight() // 2) - (80)
+        x = (update_window.winfo_screenwidth() // 2) - (200)
+        y = (update_window.winfo_screenheight() // 2) - (125)
         update_window.geometry(f"+{x}+{y}")
         
         # Фрейм для содержимого
-        main_frame = ttk.Frame(update_window, padding="15")
+        main_frame = ttk.Frame(update_window, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Заголовок
-        ttk.Label(main_frame, text="🔄 Автоматическое обновление", 
-                 font=('Arial', 12, 'bold')).pack(pady=(0, 8))
+        # Иконка и заголовок
+        ttk.Label(main_frame, text="🔄 Доступно обновление", 
+                 font=('Arial', 14, 'bold')).pack(pady=(0, 10))
         
-        # Информация
-        info_text = f"""Найдена новая версия: {latest_version}
-Текущая версия: {APP_VERSION}
+        # Информация о версиях
+        info_text = f"""Найдена новая версия приложения!
 
-Обновление запустится автоматически."""
+Текущая версия: {APP_VERSION}
+Новая версия: {latest_version}
+
+Новая версия содержит улучшения и исправления.
+Обновление произойдет автоматически."""
         
-        ttk.Label(main_frame, text=info_text, justify=tk.CENTER).pack(pady=(0, 10))
+        ttk.Label(main_frame, text=info_text, justify=tk.CENTER).pack(pady=(0, 20))
         
-        # Прогресс бар для обратного отсчета
-        progress_var = tk.DoubleVar()
-        progress_bar = ttk.Progressbar(main_frame, variable=progress_var, maximum=100)
-        progress_bar.pack(fill=tk.X, pady=(0, 5))
-        
-        # Обратный отсчет
-        countdown_label = ttk.Label(main_frame, text="", font=('Arial', 8))
-        countdown_label.pack()
-        
-        # Функция обратного отсчета
-        def countdown(seconds):
-            if update_window.winfo_exists() and seconds > 0:
-                progress = ((2 - seconds) / 2) * 100
-                progress_var.set(progress)
-                countdown_label.config(text=f"Автообновление через {seconds} сек...")
-                update_window.after(1000, lambda: countdown(seconds-1))
-            elif update_window.winfo_exists():
-                progress_var.set(100)
-                countdown_label.config(text="Запуск обновления...")
-                update_window.after(300, start_update)
+        # Кнопки
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(pady=10)
         
         def start_update():
             update_window.destroy()
             self.download_and_update(download_url, latest_version)
         
-        # Запускаем обратный отсчет
-        countdown(2)
+        def cancel_update():
+            update_window.destroy()
+            # Сохраняем информацию о пропущенном обновлении
+            self.current_step.set("Обновление отложено")
+        
+        ttk.Button(button_frame, text="Обновить сейчас", 
+                  command=start_update, 
+                  style='Accent.TButton').pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Button(button_frame, text="Отложить", 
+                  command=cancel_update).pack(side=tk.LEFT)
+        
+        # Автоматическое обновление через 10 секунд
+        def auto_update():
+            if update_window.winfo_exists():
+                start_update()
+        
+        update_window.after(10000, auto_update)  # 10 секунд
+        
+        # Обратный отсчет
+        countdown_label = ttk.Label(main_frame, text="Автоматическое обновление через 10 сек", 
+                                   font=('Arial', 8), foreground='gray')
+        countdown_label.pack()
+        
+        def update_countdown(seconds):
+            if update_window.winfo_exists() and seconds > 0:
+                countdown_label.config(text=f"Автоматическое обновление через {seconds} сек")
+                update_window.after(1000, lambda: update_countdown(seconds-1))
+        
+        update_countdown(10)
 
 
 # Добавляем метод для автоматической обработки без запроса OrderID
