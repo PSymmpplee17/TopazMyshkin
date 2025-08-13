@@ -1,5 +1,5 @@
 """
-GUI прил__version__ = "1.3.0"жение для автоматизации обработки Excel файлов
+GUI прил__version__ = "1.4.0"жение для автоматизации обработки Excel файлов
 
 Объединяет все функции:
 1. Конвертация .xls в .xlsx
@@ -11,7 +11,7 @@ GUI прил__version__ = "1.3.0"жение для автоматизации о
 Дата: 2025-08-13
 """
 
-__version__ = "1.1.0"
+__version__ = "1.4.0"
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
