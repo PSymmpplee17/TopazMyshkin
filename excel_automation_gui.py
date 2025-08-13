@@ -11,7 +11,7 @@ GUI приложение для автоматизации обработки Ex
 Дата: 2025-08-13
 """
 
-__version__ = "1.0.9"
+__version__ = "1.1.0"
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
