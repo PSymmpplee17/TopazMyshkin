@@ -11,7 +11,7 @@ GUI приложение для автоматизации обработки Ex
 Дата: 2025-08-13
 """
 
-__version__ = "1.4.0"
+__version__ = "1.6.0"
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
@@ -490,45 +490,59 @@ class ExcelAutomationGUI:
         
         def download_process():
             try:
-                self.current_step.set("Подготовка к обновлению...")
+                self.current_step.set("Выполняется обновление...")
                 self.progress.start()
-                logging.info(f"Начинаем загрузку обновления до версии {new_version}")
+                logging.info(f"Начинаем реальное обновление до версии {new_version}")
                 
-                # Здесь могла бы быть логика загрузки обновления
-                # Пока просто имитируем процесс
-                import time
-                time.sleep(2)
+                # Создаем updater и выполняем РЕАЛЬНОЕ обновление файлов
+                from simple_updater import SimpleUpdater
+                updater = SimpleUpdater(__version__, Path(__file__).parent)
                 
-                self.progress.stop()
-                self.current_step.set("Обновление готово!")
+                # Обновляем файлы версий
+                pyproject_file = Path(__file__).parent / "pyproject.toml"
+                gui_file = Path(__file__)
                 
-                response = messagebox.askyesno(
-                    "Обновление загружено",
-                    f"Обновление до версии {new_version} готово к установке.\n\n"
-                    "Для установки обновления приложение будет перезапущено.\n"
-                    "Продолжить?",
-                    icon='question'
-                )
+                self.current_step.set("Обновление файла pyproject.toml...")
+                success1 = updater.update_version_file(new_version, pyproject_file)
                 
-                if response:
-                    messagebox.showinfo(
-                        "Обновление",
-                        "Обновление будет установлено при следующем запуске приложения.\n\n"
-                        "Приложение сейчас закроется."
+                self.current_step.set("Обновление файла приложения...")  
+                success2 = updater.update_version_file(new_version, gui_file)
+                
+                if success1 and success2:
+                    self.progress.stop()
+                    self.current_step.set("Обновление завершено!")
+                    
+                    response = messagebox.askyesno(
+                        "Обновление завершено",
+                        f"Приложение успешно обновлено до версии {new_version}!\n\n"
+                        "Изменения:\n"
+                        "• Обновлена версия в pyproject.toml\n" 
+                        "• Обновлена версия в GUI приложении\n\n"
+                        "Перезапустить приложение для применения изменений?",
+                        icon='question'
                     )
-                    logging.info("Пользователь подтвердил установку обновления")
-                    self.root.quit()
+                    
+                    if response:
+                        logging.info("Перезапуск приложения после обновления")
+                        self.restart_application()
+                    else:
+                        self.current_step.set(f"Обновлено до v{new_version}")
+                        logging.info("Обновление завершено, перезапуск отложен")
                 else:
-                    self.current_step.set("Готов к обработке")
-                    logging.info("Пользователь отменил установку обновления")
+                    self.progress.stop()
+                    self.current_step.set("Ошибка обновления файлов")
+                    messagebox.showerror(
+                        "Ошибка обновления", 
+                        "Не удалось обновить файлы версий.\nПроверьте права доступа к файлам."
+                    )
                 
             except Exception as e:
                 self.progress.stop()
-                self.current_step.set("Ошибка загрузки обновления")
-                logging.error(f"Ошибка при загрузке обновления: {e}")
-                messagebox.showerror("Ошибка", f"Ошибка при загрузке обновления: {str(e)}")
+                self.current_step.set("Ошибка обновления")
+                logging.error(f"Ошибка при обновлении: {e}")
+                messagebox.showerror("Ошибка", f"Ошибка при обновлении: {str(e)}")
         
-        # Запускаем загрузку в отдельном потоке
+        # Запускаем обновление в отдельном потоке
         thread = threading.Thread(target=download_process, daemon=True)
         thread.start()
     
