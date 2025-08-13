@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "excel-automation-tool"
 version = "1.0.9"
-description = "Инструмент автоматизации обработки Excel файлов"
+description = "Excel files automation processing tool"
 readme = "README.md"
 authors = [
     {name = "Developer", email = "developer@example.com"}
@@ -44,7 +44,7 @@ include-package-data = true
 [tool.setuptools.package-data]
 excel_automation = ["*.py"]
 
-# Конфигурация для автоматических обновлений
+# Auto-update configuration
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 version_variables = [
@@ -56,7 +56,7 @@ dist_path = "dist/"
 upload_to_pypi = false
 upload_to_repository = true
 repository_url = "https://github.com/user/excel-automation-tool"
-commit_message = "🔖 bump version to {version}"
+commit_message = "bump version to {version}"
 tag_format = "v{version}"
 changelog_file = "CHANGELOG.md"
 changelog_sections = "feature,fix,breaking,documentation,performance"
